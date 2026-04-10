@@ -32,7 +32,7 @@
 
 ```swift
 dependencies: [
-    .package(url: "YOUR_GIT_URL", from: "1.0.0")
+    .package(url: "[SDRouting](https://github.com/sinduke/SDRouting.git)", from: "1.0.0")
 ]
 ```
 
