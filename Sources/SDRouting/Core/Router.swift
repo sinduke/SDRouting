@@ -18,7 +18,7 @@ public protocol RouterProtocol {
   func dismissModal()
 }
 
-extension RouterProtocol {
+public extension RouterProtocol {
     @MainActor
   func showModal<T: View>(
     configuration: AppModalConfiguration = .default,
@@ -28,7 +28,7 @@ extension RouterProtocol {
   }
 }
 
-extension EnvironmentValues {
+ public extension EnvironmentValues {
   @Entry var router: RouterProtocol = MockRouter()
 }
 

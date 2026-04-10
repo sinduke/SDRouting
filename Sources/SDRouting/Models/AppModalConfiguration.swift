@@ -9,5 +9,6 @@ public struct AppModalConfiguration {
   var contentTransition: AnyTransition = .slide
   var maxWidth: CGFloat = 520
 
-    @MainActor static let `default` = Self()
+  @MainActor
+  public static let `default` = Self()
 }
