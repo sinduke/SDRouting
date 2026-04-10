@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "SDRouting",
     platforms: [
-        .iOS(.v16),
+        .iOS(.v17),
         .macOS(.v15)
     ],
     products: [
