@@ -9,6 +9,17 @@ public struct AnyAppAlert: Identifiable {
     public var role: ButtonRole?
     public var action: (() -> Void)?
 
+    public init(
+    id: UUID = UUID(),
+    title: String,
+    role: ButtonRole? = nil,
+    action: (() -> Void)? = nil
+  ) {
+    self.title = title
+    self.role = role
+    self.action = action
+  }
+
     public static func ok(_ title: String = "OK", action: (() -> Void)? = nil) -> Self {
       .init(title: title, role: .cancel, action: action)
     }
