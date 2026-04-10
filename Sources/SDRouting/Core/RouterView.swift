@@ -6,39 +6,60 @@ public struct RouterView<Content: View>: View, RouterProtocol {
   @StateObject private var coordinator: RouterPresentationCoordinator
 
   var addNavigationView: Bool
+  private let hostsPresentation: Bool
   @ViewBuilder let content: (RouterProtocol) -> Content
 
   public init(
     addNavigationView: Bool = true,
-    presentationCoordinator: RouterPresentationCoordinator? = nil,
+    @ViewBuilder content: @escaping (RouterProtocol) -> Content
+  ) {
+    self.init(
+      addNavigationView: addNavigationView,
+      hostsPresentation: true,
+      presentationCoordinator: RouterPresentationCoordinator(),
+      content: content
+    )
+  }
+
+  init(
+    addNavigationView: Bool,
+    hostsPresentation: Bool,
+    presentationCoordinator: RouterPresentationCoordinator,
     @ViewBuilder content: @escaping (RouterProtocol) -> Content
   ) {
     self.addNavigationView = addNavigationView
-    self._coordinator = StateObject(
-      wrappedValue: presentationCoordinator ?? RouterPresentationCoordinator()
-    )
+    self.hostsPresentation = hostsPresentation
+    self._coordinator = StateObject(wrappedValue: presentationCoordinator)
     self.content = content
   }
 
   public var body: some View {
-    NavigationStackIfNeeded(
+    let routerContent = NavigationStackIfNeeded(
       path: binding(\.path),
       addNavigationView: addNavigationView,
       ownerID: routerID.uuidString
     ) {
       content(self)
-        .sheetViewModifier(screen: binding(\.sheet), ownerID: routerID.uuidString)
-        .fullScreenCoverViewModifier(
-          screen: binding(\.fullScreenCover),
-          ownerID: routerID.uuidString
-        )
-        .showCustomAlert(binding(\.alert))
     }
-    .modalViewModifier(
-      screen: binding(\.modal),
-      configuration: coordinator.modalConfiguration,
-      ownerID: routerID.uuidString
-    )
+
+    Group {
+      if hostsPresentation {
+        routerContent
+          .sheetViewModifier(screen: binding(\.sheet), ownerID: routerID.uuidString)
+          .fullScreenCoverViewModifier(
+            screen: binding(\.fullScreenCover),
+            ownerID: routerID.uuidString
+          )
+          .showCustomAlert(binding(\.alert))
+          .modalViewModifier(
+            screen: binding(\.modal),
+            configuration: coordinator.modalConfiguration,
+            ownerID: routerID.uuidString
+          )
+      } else {
+        routerContent
+      }
+    }
     .environment(\.router, self)
     .onAppear {
       logState("router.appear")
@@ -74,6 +95,7 @@ public struct RouterView<Content: View>: View, RouterProtocol {
 
     let destinationView = RouterView<T>(
       addNavigationView: segue.addNavigationView,
+      hostsPresentation: segue != .push,
       presentationCoordinator: destinationCoordinator
     ) { newRouter in
       destination(newRouter)
@@ -155,6 +177,7 @@ private extension RouterView {
       "routerID": routerID.uuidString,
       "coordinatorID": coordinator.id.uuidString,
       "addNavigationView": addNavigationView.description,
+      "hostsPresentation": String(hostsPresentation),
       "path": debugPath(coordinator.path),
       "pathCount": String(coordinator.path.count),
       "sheet": debugValue(for: coordinator.sheet),

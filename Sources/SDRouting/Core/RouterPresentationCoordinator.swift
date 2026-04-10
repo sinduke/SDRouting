@@ -1,15 +1,15 @@
 import SwiftUI
 
 @MainActor
-public final class RouterPresentationCoordinator: ObservableObject {
-  public let id = UUID()
+final class RouterPresentationCoordinator: ObservableObject {
+  let id = UUID()
 
-  @Published public var path: [AnyDestination] = []
-  @Published public var sheet: AnyDestination?
-  @Published public var fullScreenCover: AnyDestination?
-  @Published public var alert: AnyAppAlert?
-  @Published public var modal: AnyDestination?
-  @Published public var modalConfiguration: AppModalConfiguration = .default
+  @Published var path: [AnyDestination] = []
+  @Published var sheet: AnyDestination?
+  @Published var fullScreenCover: AnyDestination?
+  @Published var alert: AnyAppAlert?
+  @Published var modal: AnyDestination?
+  @Published var modalConfiguration: AppModalConfiguration = .default
 
-  public init() {}
+  init() {}
 }
