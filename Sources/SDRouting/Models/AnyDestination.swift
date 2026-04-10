@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct AnyDestination: Hashable {
+public struct AnyDestination: Hashable, Identifiable {
   public let id: UUID
   public let destination: AnyView
   public let debugLabel: String
