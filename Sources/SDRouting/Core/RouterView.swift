@@ -3,37 +3,55 @@ import SwiftUI
 public struct RouterView<Content: View>: View, RouterProtocol {
   @Environment(\.dismiss) private var dismiss
   @State private var routerID = UUID()
-  @State private var path: [AnyDestination] = []
-  @State private var showSheet: AnyDestination? = nil
-  @State private var showFullScreenCover: AnyDestination? = nil
-  @State private var alert: AnyAppAlert?
-  @State private var modal: AnyDestination?
-  @State private var modalConfiguration: AppModalConfiguration = .default
-  // 从上一视图绑定到堆栈视图
-  @Binding var screenStack: [AnyDestination]
+  @State private var localPath: [AnyDestination] = []
+  @State private var localSheet: AnyDestination? = nil
+  @State private var localFullScreenCover: AnyDestination? = nil
+  @State private var localAlert: AnyAppAlert?
+  @State private var localModal: AnyDestination?
+  @State private var localModalConfiguration: AppModalConfiguration = .default
+
+  private let externalPath: Binding<[AnyDestination]>?
+  private let externalSheet: Binding<AnyDestination?>?
+  private let externalFullScreenCover: Binding<AnyDestination?>?
+  private let externalAlert: Binding<AnyAppAlert?>?
+  private let externalModal: Binding<AnyDestination?>?
+  private let externalModalConfiguration: Binding<AppModalConfiguration>?
+
   var addNavigationView: Bool
   @ViewBuilder let content: (RouterProtocol) -> Content
 
-   public init(
+  public init(
     addNavigationView: Bool = true,
-    screenStack: (Binding<[AnyDestination]>)? = nil,
+    path: Binding<[AnyDestination]>? = nil,
+    sheet: Binding<AnyDestination?>? = nil,
+    fullScreenCover: Binding<AnyDestination?>? = nil,
+    alert: Binding<AnyAppAlert?>? = nil,
+    modal: Binding<AnyDestination?>? = nil,
+    modalConfiguration: Binding<AppModalConfiguration>? = nil,
     @ViewBuilder content: @escaping (RouterProtocol) -> Content
   ) {
     self.addNavigationView = addNavigationView
-    self._screenStack = screenStack ?? .constant([])
+    self.externalPath = path
+    self.externalSheet = sheet
+    self.externalFullScreenCover = fullScreenCover
+    self.externalAlert = alert
+    self.externalModal = modal
+    self.externalModalConfiguration = modalConfiguration
     self.content = content
   }
 
   public var body: some View {
-    /// 如果 screenStack 绑定了外部状态，则使用它，否则使用内部 path 状态
-    /// 如果content有单独的modifier 也不需要写两次
-    NavigationStackIfNeeded(path: $path, addNavigationView: addNavigationView, ownerID: routerID.uuidString) {
+    NavigationStackIfNeeded(path: pathBinding, addNavigationView: addNavigationView, ownerID: routerID.uuidString) {
       content(self)
-        .sheetViewModifier(screen: $showSheet, ownerID: routerID.uuidString)
-        .fullScreenCoverViewModifier(screen: $showFullScreenCover, ownerID: routerID.uuidString)
-        .showCustomAlert($alert)
+        .sheetViewModifier(screen: sheetBinding, ownerID: routerID.uuidString)
+        .fullScreenCoverViewModifier(screen: fullScreenCoverBinding, ownerID: routerID.uuidString)
+        .showCustomAlert(alertBinding)
     }
-    .modalViewModifier(screen: $modal, configuration: modalConfiguration, ownerID: routerID.uuidString)
+    .modalViewModifier(
+      screen: modalBinding,
+      configuration: modalConfigurationBinding.wrappedValue,
+      ownerID: routerID.uuidString
+    )
     .environment(\.router, self)
     .onAppear {
       logState("router.appear")
@@ -41,31 +59,28 @@ public struct RouterView<Content: View>: View, RouterProtocol {
     .onDisappear {
       logState("router.disappear")
     }
-    .onChange(of: path) { _, _ in
+    .onChange(of: pathBinding.wrappedValue) { _, _ in
       logState("path.changed")
     }
-    .onChange(of: screenStack) { _, _ in
-      logState("screenStack.changed")
-    }
-    .onChange(of: showSheet) { _, newValue in
+    .onChange(of: sheetBinding.wrappedValue) { _, newValue in
       logState(
         "sheet.state.changed",
         extra: ["sheet": debugValue(for: newValue)]
       )
     }
-    .onChange(of: showFullScreenCover) { _, newValue in
+    .onChange(of: fullScreenCoverBinding.wrappedValue) { _, newValue in
       logState(
         "fullScreen.state.changed",
         extra: ["fullScreen": debugValue(for: newValue)]
       )
     }
-    .onChange(of: modal) { _, newValue in
+    .onChange(of: modalBinding.wrappedValue) { _, newValue in
       logState(
         "modal.state.changed",
         extra: ["modal": debugValue(for: newValue)]
       )
     }
-    .onChange(of: alert?.id) { _, newValue in
+    .onChange(of: alertBinding.wrappedValue?.id) { _, newValue in
       logState(
         "alert.state.changed",
         extra: ["alert": newValue?.uuidString ?? "nil"]
@@ -79,9 +94,15 @@ public struct RouterView<Content: View>: View, RouterProtocol {
   ) {
     logState("navigate.begin", extra: ["segue": segue.description])
 
+    let sharesPresentationHost = segue == .push
     let destinationView = RouterView<T>(
       addNavigationView: segue.addNavigationView,
-      screenStack: segue.addNavigationView ? nil : (screenStack.isEmpty ? $path : $screenStack),
+      path: sharesPresentationHost ? pathBinding : nil,
+      sheet: sharesPresentationHost ? sheetBinding : nil,
+      fullScreenCover: sharesPresentationHost ? fullScreenCoverBinding : nil,
+      alert: sharesPresentationHost ? alertBinding : nil,
+      modal: sharesPresentationHost ? modalBinding : nil,
+      modalConfiguration: sharesPresentationHost ? modalConfigurationBinding : nil,
     ) { newRouter in
       destination(newRouter)
     }
@@ -92,15 +113,11 @@ public struct RouterView<Content: View>: View, RouterProtocol {
     )
     switch segue {
     case .push:
-      if screenStack.isEmpty {
-        path.append(anyDestination)
-      } else {
-        screenStack.append(anyDestination)
-      }
+      pathBinding.wrappedValue.append(anyDestination)
     case .sheet:
-      showSheet = anyDestination
+      sheetBinding.wrappedValue = anyDestination
     case .fullScreenCover:
-      showFullScreenCover = anyDestination
+      fullScreenCoverBinding.wrappedValue = anyDestination
     }
 
     logState(
@@ -119,12 +136,12 @@ public struct RouterView<Content: View>: View, RouterProtocol {
   }
 
   public func showAlert(_ alert: AnyAppAlert) {
-    self.alert = alert
+    alertBinding.wrappedValue = alert
     logState("alert.show", extra: ["title": alert.title])
   }
 
   public func dismissAlert() {
-    self.alert = nil
+    alertBinding.wrappedValue = nil
     logState("alert.dismiss")
   }
 
@@ -132,37 +149,62 @@ public struct RouterView<Content: View>: View, RouterProtocol {
     configuration: AppModalConfiguration,
     @ViewBuilder content: @escaping () -> T
   ) {
-    modalConfiguration = configuration
+    modalConfigurationBinding.wrappedValue = configuration
     withAnimation(configuration.contentAnimation) {
-      self.modal = AnyDestination(
+      modalBinding.wrappedValue = AnyDestination(
         destination: content(),
         debugLabel: String(describing: T.self)
       )
     }
-    logState("modal.show", extra: ["modal": debugValue(for: modal)])
+    logState("modal.show", extra: ["modal": debugValue(for: modalBinding.wrappedValue)])
   }
 
   public func dismissModal() {
-    withAnimation(modalConfiguration.contentAnimation) {
-      self.modal = nil
+    withAnimation(modalConfigurationBinding.wrappedValue.contentAnimation) {
+      modalBinding.wrappedValue = nil
     }
     logState("modal.dismiss")
   }
 }
 
 private extension RouterView {
+  var pathBinding: Binding<[AnyDestination]> {
+    externalPath ?? $localPath
+  }
+
+  var sheetBinding: Binding<AnyDestination?> {
+    externalSheet ?? $localSheet
+  }
+
+  var fullScreenCoverBinding: Binding<AnyDestination?> {
+    externalFullScreenCover ?? $localFullScreenCover
+  }
+
+  var alertBinding: Binding<AnyAppAlert?> {
+    externalAlert ?? $localAlert
+  }
+
+  var modalBinding: Binding<AnyDestination?> {
+    externalModal ?? $localModal
+  }
+
+  var modalConfigurationBinding: Binding<AppModalConfiguration> {
+    externalModalConfiguration ?? $localModalConfiguration
+  }
+
   func logState(_ event: String, extra: [String: String] = [:]) {
     var details = [
       "routerID": routerID.uuidString,
       "addNavigationView": addNavigationView.description,
-      "path": debugPath(path),
-      "pathCount": String(path.count),
-      "screenStack": debugPath(screenStack),
-      "screenStackCount": String(screenStack.count),
-      "sheet": debugValue(for: showSheet),
-      "fullScreen": debugValue(for: showFullScreenCover),
-      "modal": debugValue(for: modal),
-      "alertTitle": alert?.title ?? "nil",
+      "usesExternalHost": String(externalSheet != nil),
+      "path": debugPath(pathBinding.wrappedValue),
+      "pathCount": String(pathBinding.wrappedValue.count),
+      "localPath": debugPath(localPath),
+      "localPathCount": String(localPath.count),
+      "sheet": debugValue(for: sheetBinding.wrappedValue),
+      "fullScreen": debugValue(for: fullScreenCoverBinding.wrappedValue),
+      "modal": debugValue(for: modalBinding.wrappedValue),
+      "alertTitle": alertBinding.wrappedValue?.title ?? "nil",
     ]
 
     for (key, value) in extra {
