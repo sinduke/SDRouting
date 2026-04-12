@@ -3,5 +3,5 @@
 
 public enum SDRoutingKit {
 	/// The current package version.
-	public static let version = "0.0.1"
+	public static let version = "0.0.3"
 }
